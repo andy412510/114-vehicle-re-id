@@ -1,6 +1,6 @@
 # Development Environment
 windows  
-Python 3.8.17  
+Python 3.8.19  
 Pytorch
 and other mod in environment.yaml
 # Download Data
