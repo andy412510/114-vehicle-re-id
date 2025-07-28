@@ -4,7 +4,7 @@ Python 3.8.19
 Pytorch
 and other mod in environment.yaml
 # Download Data
-Download two datasets:  
+Download one datasets:  
 1. VeRi-776
     
 Download VeRi pretrained:  
