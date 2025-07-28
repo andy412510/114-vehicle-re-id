@@ -1,15 +1,14 @@
 # Development Environment
-Linux  
+windows  
 Python 3.8.17  
 Pytorch
-
+and other mod in environment.yaml
 # Download Data
 Download two datasets:  
-1. MSMT17  
-2. Market-1501  
-
-Download TCMM pretrained:  
-https://drive.google.com/file/d/1CcLWxjS4HcDgDL0bJ1n0B3CuB9bN_p5Z/view?usp=sharing  
+1. VeRi-776
+    
+Download VeRi pretrained:  
+https://www.kaggle.com/datasets/abhyudaya12/veri-vehicle-re-identification-dataset
 
 # Path Setting 
 ### Modify the following code to match your data path.
