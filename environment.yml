@@ -1,4 +1,4 @@
-name: pass_test
+name: vehicle
 channels:
   - pytorch
   - conda-forge
