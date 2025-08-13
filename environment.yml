@@ -103,4 +103,3 @@ dependencies:
     - tzdata==2023.3
     - urllib3==2.2.3
     - zipp==3.17.0
-prefix: /home/andy/.conda/envs/pass
