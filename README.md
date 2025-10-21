@@ -69,32 +69,32 @@ https://github.com/andy412510/TCMM/blob/c7c617e1224fac14418a2130594eb6318a12fa33
 
 以下是main_vis.py使用方式
 本版本僅改動main_vis.py / datasets/_init_.py 以及新增 datasets/veri.py
-# =================================================================================
+ =================================================================================
 # 腳本使用說明 (How to Use This Script)
-# =================================================================================
-#
+ =================================================================================
+
 # 1. 訓練模型 (To Train the model):
-#    直接執行此腳本，不要加上 --visualize 參數。
-#    `python train/main.py`
-#    程式將會進行訓練，並將最佳模型儲存於日誌 (logs) 目錄下。
-#
+    直接執行此腳本，不要加上 --visualize 參數。
+    `python train/main.py`
+    程式將會進行訓練，並將最佳模型儲存於日誌 (logs) 目錄下。
+
 # 2. 生成視覺化圖表 (To Generate Visualizations):
-#    在模型訓練完成後 (日誌目錄中已有 'model_best.pth.tar' 檔案)，使用 --visualize 參數。
-#    程式會跳過訓練，直接載入最佳模型來生成指定的圖表。
-#
+    在模型訓練完成後 (日誌目錄中已有 'model_best.pth.tar' 檔案)，使用 --visualize 參數。
+    程式會跳過訓練，直接載入最佳模型來生成指定的圖表。
+
 #    A. t-SNE 分佈圖:
-#       此功能會分析整個測試集的特徵分佈。
-#       `python train/main.py --visualize tsne`
-#       輸出: `tsne_visualization.jpg` 將會儲存在日誌目錄下。
-#
+       此功能會分析整個測試集的特徵分佈。
+       `python train/main.py --visualize tsne`
+       輸出: `tsne_visualization.jpg` 將會儲存在日誌目錄下。
+
 #    B. Heatmap 熱力圖:
-#       為單張圖片生成注意力熱力圖，需要搭配 --vis_image 參數指定圖片路徑。
-#       `python train/main.py --visualize heatmap --vis_image "path/to/your/image.jpg"`
-#       輸出: `<image_name>_heatmap.png` 將會儲存在日誌目錄下。
-#
+       為單張圖片生成注意力熱力圖，需要搭配 --vis_image 參數指定圖片路徑。
+       `python train/main.py --visualize heatmap --vis_image "path/to/your/image.jpg"`
+       輸出: `<image_name>_heatmap.png` 將會儲存在日誌目錄下。
+
 #    C. DINO 自注意力圖:
-#       為單張圖片生成 ViT 模型每個 head 的自注意力圖，需要搭配 --vis_image 參數。
-#       `python train/main.py --visualize dino_attention --vis_image "path/to/your/image.jpg"`
-#       輸出: 日誌目錄下會建立一個新的資料夾，內含所有注意力圖。
-#
-# =================================================================================
+       為單張圖片生成 ViT 模型每個 head 的自注意力圖，需要搭配 --vis_image 參數。
+       `python train/main.py --visualize dino_attention --vis_image "path/to/your/image.jpg"`
+       輸出: 日誌目錄下會建立一個新的資料夾，內含所有注意力圖。
+
+ =================================================================================
