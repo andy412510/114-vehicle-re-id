@@ -4,14 +4,15 @@ import warnings
 from .market1501 import Market1501
 from .msmt17 import MSMT17
 from .msmt17_v2 import MSMT17_V2
+from .veri import VeRi
 
 
 __factory = {
     'market1501': Market1501,
     'msmt17': MSMT17,
-    'msmt17_v2': MSMT17_V2
+    'msmt17_v2': MSMT17_V2,
+    'VeRi': VeRi
 }
-
 
 def names():
     return sorted(__factory.keys())
