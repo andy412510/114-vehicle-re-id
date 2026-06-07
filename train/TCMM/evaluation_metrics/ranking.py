@@ -113,7 +113,8 @@ def mean_ap(distmat, query_ids=None, gallery_ids=None,
         top5_indices = filter_indices[:5]
         top5_matches = filter_matches[:5]
         
-        top5_plot(i, top5_indices=top5_indices, top5_matches=top5_matches, query_img_paths=query_img_paths, gallery_img_paths=gallery_img_paths)
+        if query_img_paths is not None:
+            top5_plot(i, top5_indices=top5_indices, top5_matches=top5_matches, query_img_paths=query_img_paths, gallery_img_paths=gallery_img_paths)
 
     if len(aps) == 0:
         raise RuntimeError("No valid query")
