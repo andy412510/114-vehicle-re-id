@@ -19,7 +19,7 @@ import torch.nn.functional as F
 
 from my import datasets, models
 from my.models.cm import ClusterMemory
-from my.trainers import Trainer
+from my.trainers_baseline import Trainer
 from my.evaluators import Evaluator, extract_features
 from my.utils.data import IterLoader
 from my.utils.data import transforms as T
@@ -47,12 +47,12 @@ def get_train_loader(args, dataset, height, width, batch_size, workers,
 
     train_transformer = T.Compose([
         T.Resize((height, width), interpolation=3),
-        # T.RandomHorizontalFlip(p=0.5),
-        # T.Pad(10),
+        T.RandomHorizontalFlip(p=0.5),
+        T.Pad(10),
         T.RandomCrop((height, width)),
         T.ToTensor(),
         normalizer,
-        # T.RandomErasing(probability=0.5, mean=[0.485, 0.456, 0.406])
+        T.RandomErasing(probability=0.5, mean=[0.485, 0.456, 0.406])
     ])
 
     train_set = sorted(dataset.train) if trainset is None else sorted(trainset)
@@ -136,8 +136,10 @@ def main_worker(args):
 
     # Create model
     model = create_model(args)
+
     # Evaluator
     evaluator = Evaluator(model)
+
     # Optimizer
     params = [{"params": [value]} for _, value in model.named_parameters() if value.requires_grad]
     print('optimizer: %s'%(args.optimizer))
@@ -179,8 +181,8 @@ def main_worker(args):
             print('==> Create pseudo labels for unlabeled data')
             features, _ = extract_features(model, cluster_loader, print_freq=50)
             features = torch.cat([features[f].unsqueeze(0) for f, _, _ in sorted(dataset.train)], 0)
-            # select & cluster images as training set of this epochs
             rerank_dist = compute_jaccard_distance(features, k1=args.k1, k2=args.k2)
+            # select & cluster images as training set of this epochs
             pseudo_labels = cluster.fit_predict(rerank_dist)
             feature_memory.labels = torch.Tensor(pseudo_labels).cuda()
             num_cluster = len(set(pseudo_labels)) - (1 if -1 in pseudo_labels else 0)
@@ -224,8 +226,8 @@ def main_worker(args):
 
         train_loader.new_epoch()
 
-        trainer.train(epoch, train_loader, optimizer, args.K, args.patch_rate, args.positive_rate, index_dic=index_dic,
-                      print_freq=args.print_freq, train_iters=len(train_loader), vis_patch=True)
+        trainer.train(epoch, train_loader, optimizer, args.K, args.temp, args.momentum, index_dic=index_dic,
+                      print_freq=args.print_freq, train_iters=len(train_loader), )
 
         if (epoch + 1) % args.eval_step == 0 or (epoch == args.epochs - 1):
             mAP = evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=False)
@@ -256,12 +258,12 @@ if __name__ == '__main__':
     # data
     parser.add_argument('-d', '--dataset', type=str, default='msmt17',  # msmt17, msmt17_v2, market1501
                         choices=datasets.names())
-    parser.add_argument('--gpu', type=str, default='0,1,2,3')
-    parser.add_argument('-b', '--batch-size', type=int, default=512)
-    parser.add_argument('--epochs', type=int, default=1)
+    parser.add_argument('--gpu', type=str, default='0,1,2,3,4,5,6,7')
+    parser.add_argument('-b', '--batch-size', type=int, default=64)
+    parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('-j', '--workers', type=int, default=4)
-    parser.add_argument('-K', type=int, default=4, help="negative samples number for instance memory")
-    parser.add_argument('--patch-rate', type=float, default=0.075, help="noise patch rate for patch refine")
+    parser.add_argument('-K', type=int, default=8192, help="negative samples number for instance memory")
+    parser.add_argument('--patch-rate', type=float, default=0.025, help="noise patch rate for patch refine")
     parser.add_argument('--positive-rate', type=int, default=3, help="positive sample number for patch refine")
     parser.add_argument('--height', type=int, default=256, help="input height")
     parser.add_argument('--width', type=int, default=128, help="input width")
@@ -283,7 +285,7 @@ if __name__ == '__main__':
     # model
     parser.add_argument('-a', '--arch', type=str, default='vit_small',
                         choices=models.names())
-    parser.add_argument('-pp', '--pretrained-path', type=str, default='./log/cluster_contrast_reid/msmt17_v1/512_K4_r0.075_outlers.pth.tar')
+    parser.add_argument('-pp', '--pretrained-path', type=str, default='/home/andy/ICASSP_data/pretrain/PASS/pass_vit_small_full.pth')
     parser.add_argument('--features', type=int, default=0)
     parser.add_argument('--dropout', type=float, default=0)
     parser.add_argument('--momentum', type=float, default=0.2,
@@ -311,7 +313,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-dir', type=str, metavar='PATH',
                         default='/home/andy/ICASSP_data/data/')
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='./log/cluster_contrast_reid/msmt17_v1/pass_vit_small_full_1')  # msmt17_v1, market1501
+                        default='./log/cluster_contrast_reid/msmt17_v1/baseline')  # msmt17_v1, market1501
     parser.add_argument('--pooling-type', type=str, default='gem')
     parser.add_argument('--feat-fusion', type=str, default='cat')
     # parser.add_argument('--multi-neck', default=True)

@@ -60,7 +60,8 @@ def extract_features(model, data_loader, query_loader, print_freq=50, cluster_fe
     for p in model.parameters():
         p.requires_grad = False
     for i, (imgs, fnames, _, _, is_query) in enumerate(query_loader):  # query_loader only contains query data
-        imgs = to_torch(imgs).cuda()
+        device = next(model.parameters()).device
+        imgs = to_torch(imgs).to(device)
         vis_attention(imgs, fnames, model)
         print(f"batch {i} saved.")
     # ViT heatmap vis end

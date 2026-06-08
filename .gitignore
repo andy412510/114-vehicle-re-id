@@ -185,9 +185,7 @@ poetry.toml
 # ruff
 .ruff_cache/
 
-# LSP config files
-pyrightconfig.json
-/train/query_gallery_vis/
-/train/nothing.py
+market_512.sh
+msmt_512.sh
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python
