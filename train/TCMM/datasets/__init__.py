@@ -7,7 +7,6 @@ from .msmt17_v2 import MSMT17_V2
 from .veri import VeRi
 from .vehicleid import VehicleID
 from .resized import Resized
-from .blur import Blur
 
 
 __factory = {
@@ -17,7 +16,6 @@ __factory = {
     'VeRi': VeRi,
     'VehicleID': VehicleID,
     'resized': Resized,
-    'blur': Blur
 }
 
 def names():
