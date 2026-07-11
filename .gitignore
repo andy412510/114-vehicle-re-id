@@ -185,7 +185,9 @@ poetry.toml
 # ruff
 .ruff_cache/
 
+# data
 market_512.sh
 msmt_512.sh
-
+log/
+log.txt
 # End of https://www.toptal.com/developers/gitignore/api/linux,python
