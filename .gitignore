@@ -189,3 +189,13 @@ market_512.sh
 msmt_512.sh
 
 # End of https://www.toptal.com/developers/gitignore/api/linux,python
+
+# Model checkpoints and training logs (too large for GitHub)
+log/
+train/log/
+*.pth
+*.pth.tar
+log.txt
+
+# Claude Code local settings
+.claude/

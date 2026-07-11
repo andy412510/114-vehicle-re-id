@@ -29,14 +29,14 @@ rank_1=[78.4,77.7,78.4,  #0.025-0.075
        76.9,77.5,77.7,77.5,75.3]  #0.9-1
 
 # 繪製折線圖
-plt.plot(r, mAP, marker='o', linestyle='-', color='b')
-# plt.plot(r, rank_1, marker='o', linestyle='-', color='b', label='Rank-1')
+# plt.plot(r, mAP, marker='o', linestyle='-', color='b')
+plt.plot(r, rank_1, marker='o', linestyle='-', color='b', label='Rank-1')
 # 標題和標籤
 # plt.title('Experiment Data')
-plt.xlabel('alpha')
-plt.ylabel('mAP(%)')
+plt.xlabel('gamma')
+plt.ylabel('Rank-1 (%)')
 
 # 顯示圖表
 plt.grid(True)
-plt.savefig('ablation_alpha_rank.png')
+plt.savefig('ablation_gamma_rank.png')
 plt.show()

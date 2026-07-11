@@ -165,7 +165,7 @@ def main_worker(args):
         _, path_list, _, _, indexes = data
         for m in range(len(path_list)):
             file_path = path_list[m]
-            file_name = osp.basename(file_path)
+            file_name = file_path.split('/')[-1]
             index_dic[file_name] = indexes[m]
 
     features, _ = extract_features(model, cluster_loader, print_freq=50)
@@ -259,7 +259,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dataset', type=str, default='msmt17',  # msmt17, msmt17_v2, market1501
                         choices=datasets.names())
     parser.add_argument('--gpu', type=str, default='0,1,2,3,4,5,6,7')
-    parser.add_argument('-b', '--batch-size', type=int, default=64)
+    parser.add_argument('-b', '--batch-size', type=int, default=128)
     parser.add_argument('--epochs', type=int, default=50)
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('-K', type=int, default=8192, help="negative samples number for instance memory")

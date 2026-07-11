@@ -5,26 +5,22 @@ import os.path as osp
 import random
 import numpy as np
 import sys
+import collections
 import time
 from datetime import timedelta
 import os
-from collections import OrderedDict, Counter
 from sklearn.cluster import DBSCAN
 import pandas as pd
-from sklearn.manifold import TSNE
-import itertools
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap
 import torch
 from torch import nn
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-from my.utils import to_torch
+
 from my import datasets, models
 from my.models.cm import ClusterMemory
 from my.trainers import Trainer
-from my.evaluators import Evaluator
+from my.evaluators import Evaluator, extract_features
 from my.utils.data import IterLoader
 from my.utils.data import transforms as T
 from my.utils.data.sampler import RandomMultipleGallerySampler
@@ -32,44 +28,13 @@ from my.utils.data.preprocessor import Preprocessor
 from my.utils.logging import Logger
 from my.utils.serialization import load_checkpoint, save_checkpoint
 from my.utils.faiss_rerank import compute_jaccard_distance
+print('patch_re')
 start_epoch = best_mAP = 0
 
 
 def get_data(name, data_dir):
     dataset = datasets.create(name, data_dir)
     return dataset
-
-
-def get_train_loader(args, dataset, height, width, batch_size, workers,
-                     num_instances, iters, trainset=None):
-    if args.self_norm:
-        normalizer = T.Normalize(mean=[0.5, 0.5, 0.5],
-                                 std=[0.5, 0.5, 0.5])
-    else:
-        normalizer = T.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-
-    train_transformer = T.Compose([
-        T.Resize((height, width), interpolation=3),
-        T.RandomHorizontalFlip(p=0.5),
-        T.Pad(10),
-        T.RandomCrop((height, width)),
-        T.ToTensor(),
-        normalizer,
-        T.RandomErasing(probability=0.5, mean=[0.485, 0.456, 0.406])
-    ])
-
-    train_set = sorted(dataset.train) if trainset is None else sorted(trainset)
-    rmgs_flag = num_instances > 0
-    if rmgs_flag:
-        sampler = RandomMultipleGallerySampler(train_set, num_instances)
-    else:
-        sampler = None
-    train_loader = IterLoader(
-        DataLoader(Preprocessor(train_set, root=dataset.images_dir, nv_root=dataset.images_dir, transform=train_transformer),
-                   batch_size=batch_size, num_workers=workers, sampler=sampler,
-                   shuffle=not rmgs_flag, pin_memory=True, drop_last=True), length=iters)  # shuffle=not rmgs_flag
-    return train_loader
 
 
 def get_test_loader(args, dataset, height, width, batch_size, workers, testset=None):
@@ -143,10 +108,10 @@ def main_worker(args):
 
     # Evaluator
     evaluator = Evaluator(model)
-    print('==> Test with the best model:')
-    checkpoint = load_checkpoint(osp.join(args.logs_dir, '512_K4_r0.075_outlers.pth.tar'))
-    model.load_state_dict(checkpoint['state_dict'])
 
+    print('==> Test with the best model:')
+    # checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
+    # model.load_state_dict(checkpoint['state_dict'])
     evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True)
 
     end_time = time.monotonic()
@@ -158,15 +123,13 @@ if __name__ == '__main__':
     # data
     parser.add_argument('-d', '--dataset', type=str, default='msmt17',  # msmt17, msmt17_v2, market1501
                         choices=datasets.names())
-    parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='./log/cluster_contrast_reid/msmt17_v1')  # msmt17_v1, market1501
     parser.add_argument('--gpu', type=str, default='0,1,2,3')
-    parser.add_argument('-b', '--batch-size', type=int, default=1024)
+    parser.add_argument('-b', '--batch-size', type=int, default=512)
     parser.add_argument('--epochs', type=int, default=80)
     parser.add_argument('-j', '--workers', type=int, default=4)
-    # parser.add_argument('-K', type=int, default=8, help="negative samples number for instance memory")
-    # parser.add_argument('--patch-rate', type=float, default=0.025, help="noise patch rate for patch refine")
-    # parser.add_argument('--positive-rate', type=int, default=3, help="positive sample number for patch refine")
+    parser.add_argument('-K', type=int, default=8, help="negative samples number for instance memory")
+    parser.add_argument('--patch-rate', type=float, default=0.025, help="noise patch rate for patch refine")
+    parser.add_argument('--positive-rate', type=int, default=3, help="positive sample number for patch refine")
     parser.add_argument('--height', type=int, default=256, help="input height")
     parser.add_argument('--width', type=int, default=128, help="input width")
     parser.add_argument('--num-instances', type=int, default=8,
@@ -174,26 +137,36 @@ if __name__ == '__main__':
                              "(batch_size // num_instances) identities, and "
                              "each i dentity has num_instances instances, "
                              "default: 0 (NOT USE)")
+    # DBSCAN
+    parser.add_argument('--eps', type=float, default=0.6,
+                        help="max neighbor distance for DBSCAN")
+    parser.add_argument('--eps-gap', type=float, default=0.02,
+                        help="multi-scale criterion for measuring cluster reliability")
+    parser.add_argument('--k1', type=int, default=30,
+                        help="hyperparameter for jaccard distance")
+    parser.add_argument('--k2', type=int, default=6,
+                        help="hyperparameter for jaccard distance")
+
     # model
     parser.add_argument('-a', '--arch', type=str, default='vit_small',
                         choices=models.names())
     parser.add_argument('-pp', '--pretrained-path', type=str, default='/home/andy/ICASSP_data/pretrain/PASS/pass_vit_small_full.pth')
     parser.add_argument('--features', type=int, default=0)
     parser.add_argument('--dropout', type=float, default=0)
-    # parser.add_argument('--momentum', type=float, default=0.2,
-    #                     help="update momentum for the memory")
+    parser.add_argument('--momentum', type=float, default=0.2,
+                        help="update momentum for the memory")
     #vit
     parser.add_argument('--drop-path-rate', type=float, default=0.3)
     parser.add_argument('--hw-ratio', type=int, default=2)
     parser.add_argument('--self-norm', default=True)
     parser.add_argument('--conv-stem', action="store_true")
     # optimizer
-    # parser.add_argument('--lr', type=float, default=0.00035,
-    #                     help="learning rate")
-    # parser.add_argument('--weight-decay', type=float, default=5e-4)
-    # parser.add_argument('--optimizer', type=str, default='SGD')
+    parser.add_argument('--lr', type=float, default=0.00035,
+                        help="learning rate")
+    parser.add_argument('--weight-decay', type=float, default=5e-4)
+    parser.add_argument('--optimizer', type=str, default='SGD')
     parser.add_argument('--iters', type=int, default=200)
-    # parser.add_argument('--step-size', type=int, default=20)
+    parser.add_argument('--step-size', type=int, default=20)
     # training configs
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--print-freq', type=int, default=20)
@@ -204,7 +177,8 @@ if __name__ == '__main__':
     working_dir = osp.dirname(osp.abspath(__file__))
     parser.add_argument('--data-dir', type=str, metavar='PATH',
                         default='/home/andy/ICASSP_data/data/')
-
+    parser.add_argument('--logs-dir', type=str, metavar='PATH',
+                        default='./log/cluster_contrast_reid/market1501/pass_vit_small_full_1')  # msmt17_v2, market1501
     parser.add_argument('--pooling-type', type=str, default='gem')
     parser.add_argument('--feat-fusion', type=str, default='cat')
     # parser.add_argument('--multi-neck', default=True)

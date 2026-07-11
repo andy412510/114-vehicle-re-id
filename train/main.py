@@ -16,17 +16,17 @@ from torch.backends import cudnn
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
-from TCMM import datasets, models
-from TCMM.models.cm import ClusterMemory
-from TCMM.trainers import Trainer
-from TCMM.evaluators import Evaluator, extract_features
-from TCMM.utils.data import IterLoader
-from TCMM.utils.data import transforms as T
-from TCMM.utils.data.sampler import RandomMultipleGallerySampler
-from TCMM.utils.data.preprocessor import Preprocessor
-from TCMM.utils.logging import Logger
-from TCMM.utils.serialization import load_checkpoint, save_checkpoint
-from TCMM.utils.faiss_rerank import compute_jaccard_distance
+from my import datasets, models
+from my.models.cm import ClusterMemory
+from my.trainers import Trainer
+from my.evaluators import Evaluator, extract_features
+from my.utils.data import IterLoader
+from my.utils.data import transforms as T
+from my.utils.data.sampler import RandomMultipleGallerySampler
+from my.utils.data.preprocessor import Preprocessor
+from my.utils.logging import Logger
+from my.utils.serialization import load_checkpoint, save_checkpoint
+from my.utils.faiss_rerank import compute_jaccard_distance
 start_epoch = best_mAP = 0
 
 
@@ -63,7 +63,7 @@ def get_train_loader(args, dataset, height, width, batch_size, workers,
     train_loader = IterLoader(
         DataLoader(Preprocessor(train_set, root=dataset.images_dir, nv_root=dataset.images_dir, transform=train_transformer),
                    batch_size=batch_size, num_workers=workers, sampler=sampler,
-                   shuffle=not rmgs_flag, pin_memory=True, drop_last=False), length=iters)  # shuffle=not rmgs_flag
+                   shuffle=not rmgs_flag, pin_memory=True, drop_last=True), length=iters)  # shuffle=not rmgs_flag
     return train_loader
 
 
@@ -164,7 +164,7 @@ def main_worker(args):
         _, path_list, _, _, indexes = data
         for m in range(len(path_list)):
             file_path = path_list[m]
-            file_name = osp.basename(file_path)
+            file_name = file_path.split('/')[-1]
             index_dic[file_name] = indexes[m]
 
     features, _ = extract_features(model, cluster_loader, print_freq=50)

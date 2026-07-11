@@ -15,16 +15,16 @@ import torch
 from torch import nn
 from torch.backends import cudnn
 from torch.utils.data import DataLoader
-from TCMM.utils import to_torch
-from TCMM import datasets, models
-from TCMM.evaluators import Evaluator
-from TCMM.utils.data import IterLoader
-from TCMM.utils.data import transforms as T
-from TCMM.utils.data.sampler import RandomMultipleGallerySampler
-from TCMM.utils.data.preprocessor import Preprocessor
-from TCMM.utils.logging import Logger
-from TCMM.utils.serialization import load_checkpoint, save_checkpoint
-from TCMM.utils.faiss_rerank import compute_jaccard_distance
+from my.utils import to_torch
+from my import datasets, models
+from my.evaluators import Evaluator
+from my.utils.data import IterLoader
+from my.utils.data import transforms as T
+from my.utils.data.sampler import RandomMultipleGallerySampler
+from my.utils.data.preprocessor import Preprocessor
+from my.utils.logging import Logger
+from my.utils.serialization import load_checkpoint, save_checkpoint
+from my.utils.faiss_rerank import compute_jaccard_distance
 
 from openTSNE import TSNE
 import matplotlib.pyplot as plt
@@ -218,15 +218,15 @@ def main_worker(args):
     # Y = np.array(labels_list)
     Y = cluster.fit_predict(rerank_dist)  # DBSCAN
     tsne = TSNE(
-        perplexity=30,
+        perplexity=30,  # 可視為連續的最近鄰數量，t-SNE會嘗試保留這些鄰居間的距離。
         metric="euclidean",
         n_jobs=8,
-        random_state=42,
-        verbose=True,
+        random_state=42,  # 隨機數生成器的種子，用於保持結果的一致性。
+        verbose=True,  # 控制是否輸出詳細信息。
     )
     embedding_train = tsne.fit(X)  # tsne.fit(data feature)
     utils.plot(embedding_train, Y, colors=utils.MOUSE_10X_COLORS)  # (embedding, data label, color)
-    plt.savefig('tsne.jpg')
+    plt.savefig('tsne.jpeg')
 
     evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True)
 
@@ -240,7 +240,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dataset', type=str, default='msmt17',  # msmt17, msmt17_v2, market1501
                         choices=datasets.names())
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='/home/andy/main_code/train/log/cluster_contrast_reid/msmt17_v1')  # msmt17_v1, market1501
+                        default='./log/cluster_contrast_reid/msmt17_v1')  # msmt17_v1, market1501
     parser.add_argument('--gpu', type=str, default='0,1,2,3')
     parser.add_argument('-b', '--batch-size', type=int, default=1024)
     parser.add_argument('--epochs', type=int, default=80)

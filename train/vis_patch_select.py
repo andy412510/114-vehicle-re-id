@@ -163,7 +163,7 @@ def main_worker(args):
         _, path_list, _, _, indexes = data
         for m in range(len(path_list)):
             file_path = path_list[m]
-            file_name = osp.basename(file_path)
+            file_name = file_path.split('/')[-1]
             index_dic[file_name] = indexes[m]
 
     features, _ = extract_features(model, cluster_loader, print_freq=50)
