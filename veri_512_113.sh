@@ -1,5 +1,5 @@
 # VIT-S
-# msmt17, market1501, VeRi
+# market1501, VeRi
 python train/main.py \
 	-b 512 \
 	-d VeRi \

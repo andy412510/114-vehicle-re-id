@@ -144,10 +144,10 @@ if __name__ == '__main__':
     working_dir = osp.dirname(osp.abspath(__file__))
     parser = argparse.ArgumentParser(description="contrastive learning on unsupervised re-ID")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='msmt17',  # msmt17, market1501
+    parser.add_argument('-d', '--dataset', type=str, default='VeRi',  # market1501, VeRi
                         choices=datasets.names())
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='/home/andy/main_code/train/log/cluster_contrast_reid/msmt17_v1')
+                        default='/home/andy/main_code/train/log/cluster_contrast_reid/VeRi')
     parser.add_argument('--gpu', type=str, default='0,1,2,3')
     parser.add_argument('-b', '--batch-size', type=int, default=2048)
     parser.add_argument('--epochs', type=int, default=80)

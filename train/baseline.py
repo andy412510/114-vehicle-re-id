@@ -256,7 +256,7 @@ def main_worker(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="contrastive learning on unsupervised re-ID")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='msmt17',  # msmt17, msmt17_v2, market1501
+    parser.add_argument('-d', '--dataset', type=str, default='VeRi',  # market1501, VeRi
                         choices=datasets.names())
     parser.add_argument('--gpu', type=str, default='0,1,2,3,4,5,6,7')
     parser.add_argument('-b', '--batch-size', type=int, default=64)
@@ -313,7 +313,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-dir', type=str, metavar='PATH',
                         default='/home/andy/ICASSP_data/data/')
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='./log/cluster_contrast_reid/msmt17_v1/baseline')  # msmt17_v1, market1501
+                        default='./log/cluster_contrast_reid/VeRi/baseline')  # market1501, VeRi
     parser.add_argument('--pooling-type', type=str, default='gem')
     parser.add_argument('--feat-fusion', type=str, default='cat')
     # parser.add_argument('--multi-neck', default=True)
