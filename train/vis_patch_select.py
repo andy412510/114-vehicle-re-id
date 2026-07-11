@@ -17,17 +17,17 @@ from torch.backends import cudnn
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 
-from my import datasets, models
-from my.models.cm import ClusterMemory
-from my.trainers import Trainer
-from my.evaluators import Evaluator, extract_features
-from my.utils.data import IterLoader
-from my.utils.data import transforms as T
-from my.utils.data.sampler import RandomMultipleGallerySampler
-from my.utils.data.preprocessor import Preprocessor
-from my.utils.logging import Logger
-from my.utils.serialization import load_checkpoint, save_checkpoint
-from my.utils.faiss_rerank import compute_jaccard_distance
+from TCMM import datasets, models
+from TCMM.models.cm import ClusterMemory
+from TCMM.trainers import Trainer
+from TCMM.evaluators import Evaluator, extract_features
+from TCMM.utils.data import IterLoader
+from TCMM.utils.data import transforms as T
+from TCMM.utils.data.sampler import RandomMultipleGallerySampler
+from TCMM.utils.data.preprocessor import Preprocessor
+from TCMM.utils.logging import Logger
+from TCMM.utils.serialization import load_checkpoint, save_checkpoint
+from TCMM.utils.faiss_rerank import compute_jaccard_distance
 start_epoch = best_mAP = 0
 
 
