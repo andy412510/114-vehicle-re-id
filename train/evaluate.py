@@ -131,8 +131,12 @@ def main_worker(args):
     # Evaluator
     evaluator = Evaluator(model)
     print('==> Test with the best model:')
-    checkpoint = load_checkpoint(osp.join(args.logs_dir, '512_K4_r0.075_outlers.pth.tar'))  # 512_K4_r0.075_outlers
-    model.load_state_dict(checkpoint['state_dict'])
+    checkpoint = load_checkpoint(args.resume)
+    state_dict = checkpoint['state_dict']
+    if any(k.startswith('module.') for k in state_dict):
+        model.load_state_dict(state_dict)
+    else:
+        model.module.load_state_dict(state_dict)
 
     evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True)
 
@@ -144,10 +148,12 @@ if __name__ == '__main__':
     working_dir = osp.dirname(osp.abspath(__file__))
     parser = argparse.ArgumentParser(description="contrastive learning on unsupervised re-ID")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='VeRi',  # market1501, VeRi
+    parser.add_argument('-d', '--dataset', type=str, default='VeRi',  # market1501, VeRi, VehicleID
                         choices=datasets.names())
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='/home/andy/main_code/train/log/cluster_contrast_reid/VeRi')
+                        default='/home/andy/main_code/log/VeRi/pass_imagenet_lup')
+    parser.add_argument('--resume', type=str, metavar='PATH',
+                        default='/home/andy/main_code/log/VeRi/pass_imagenet_lup/model_best.pth.tar')
     parser.add_argument('--gpu', type=str, default='0,1,2,3')
     parser.add_argument('-b', '--batch-size', type=int, default=2048)
     parser.add_argument('--epochs', type=int, default=80)
