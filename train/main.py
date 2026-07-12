@@ -108,6 +108,8 @@ def create_model(args):
 
 def main():
     args = parser.parse_args()
+    pretrain_name = osp.splitext(osp.basename(args.pretrained_path))[0]
+    args.logs_dir = osp.join(args.logs_dir, args.dataset, pretrain_name)
     if args.seed is not None:
         random.seed(args.seed)
         np.random.seed(args.seed)
@@ -255,7 +257,7 @@ def main_worker(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="contrastive learning on unsupervised re-ID")
     # data
-    parser.add_argument('-d', '--dataset', type=str, default='VeRi',  # market1501, VeRi, VehicleID
+    parser.add_argument('-d', '--dataset', type=str, default='VehicleID',  # market1501, VeRi, VehicleID
                         choices=datasets.names())
     parser.add_argument('--gpu', type=str, default='0,1,2,3')
     parser.add_argument('-b', '--batch-size', type=int, default=512)
@@ -312,7 +314,8 @@ if __name__ == '__main__':
     parser.add_argument('--data-dir', type=str, metavar='PATH',
                         default='/home/andy/ICASSP_data/data/')
     parser.add_argument('--logs-dir', type=str, metavar='PATH',
-                        default='./log/cluster_contrast_reid/market1501/pass_vit_small_full_1')  # market1501, VeRi
+                        default='./log/',
+                        help="root log dir; <dataset>/<pretrain name> is appended automatically")
     parser.add_argument('--pooling-type', type=str, default='gem')
     parser.add_argument('--feat-fusion', type=str, default='cat')
     # parser.add_argument('--multi-neck', default=True)
