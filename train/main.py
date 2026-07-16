@@ -10,6 +10,7 @@ import time
 from datetime import timedelta
 import os
 from sklearn.cluster import DBSCAN
+from scipy.sparse import issparse as scipy_issparse
 import torch
 from torch import nn
 from torch.backends import cudnn
@@ -63,7 +64,7 @@ def get_train_loader(args, dataset, height, width, batch_size, workers,
     train_loader = IterLoader(
         DataLoader(Preprocessor(train_set, root=dataset.images_dir, nv_root=dataset.images_dir, transform=train_transformer),
                    batch_size=batch_size, num_workers=workers, sampler=sampler,
-                   shuffle=not rmgs_flag, pin_memory=True, drop_last=False), length=iters)  # shuffle=not rmgs_flag
+                   shuffle=not rmgs_flag, pin_memory=True, drop_last=True), length=iters)  # shuffle=not rmgs_flag
     return train_loader
 
 
@@ -182,11 +183,27 @@ def main_worker(args):
             print('==> Create pseudo labels for unlabeled data')
             features, _ = extract_features(model, cluster_loader, print_freq=50)
             features = torch.cat([features[f].unsqueeze(0) for f, _, _ in sorted(dataset.train)], 0)
+            # release cached blocks so faiss can cudaMalloc its temp buffer
+            torch.cuda.empty_cache()
             # select & cluster images as training set of this epochs
             rerank_dist = compute_jaccard_distance(features, k1=args.k1, k2=args.k2)
             pseudo_labels = cluster.fit_predict(rerank_dist)
             feature_memory.labels = torch.Tensor(pseudo_labels).cuda()
             num_cluster = len(set(pseudo_labels)) - (1 if -1 in pseudo_labels else 0)
+
+            # jaccard-close pairs (dist < 1, i.e. sharing k-reciprocal neighbors) that ended up
+            # in different clusters are mostly the same identity: ban them from the negative
+            # pool of the anchor loss instead of pushing them apart as hard negatives
+            if scipy_issparse(rerank_dist):
+                ban_flat = torch.from_numpy(rerank_dist.tocsr().indices.astype(np.int64)).cuda()
+                ban_offsets = rerank_dist.tocsr().indptr.astype(np.int64)
+            else:
+                ban_rows = [np.where(rerank_dist[i] < 1.0)[0] for i in range(rerank_dist.shape[0])]
+                ban_offsets = np.zeros(len(ban_rows) + 1, dtype=np.int64)
+                np.cumsum([len(r) for r in ban_rows], out=ban_offsets[1:])
+                ban_flat = torch.from_numpy(np.concatenate(ban_rows)).cuda()
+                del ban_rows
+            del rerank_dist
 
         # generate new dataset and calculate cluster centers
         @torch.no_grad()
@@ -211,6 +228,8 @@ def main_worker(args):
         memory = ClusterMemory(model.module.num_features, num_cluster, temp=args.temp,
                                momentum=args.momentum, use_hard=args.use_hard).cuda()
         memory.features = F.normalize(cluster_features, dim=1).cuda()
+        memory.ban_lists = (ban_flat, ban_offsets)
+        memory.neg_dedup = args.neg_dedup
 
         trainer.memory = memory
 
@@ -248,7 +267,7 @@ def main_worker(args):
     print('==> Test with the best model:')
     checkpoint = load_checkpoint(osp.join(args.logs_dir, 'model_best.pth.tar'))
     model.load_state_dict(checkpoint['state_dict'])
-    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True)
+    evaluator.evaluate(test_loader, dataset.query, dataset.gallery, cmc_flag=True, vis_rank=True)
 
     end_time = time.monotonic()
     print('Total running time: ', timedelta(seconds=end_time - start_time))
@@ -264,6 +283,9 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=80)
     parser.add_argument('-j', '--workers', type=int, default=4)
     parser.add_argument('-K', type=int, default=8, help="negative samples number for instance memory")
+    parser.add_argument('--neg-dedup', action="store_true",
+                        help="pick at most one (hardest) negative per cluster in the anchor loss; "
+                             "recommended for large K to cap false-negative repulsion")
     parser.add_argument('--patch-rate', type=float, default=0.075, help="noise patch rate for patch refine")
     parser.add_argument('--positive-rate', type=int, default=3, help="positive sample number for patch refine")
     parser.add_argument('--height', type=int, default=256, help="input height")

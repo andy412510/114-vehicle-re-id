@@ -45,15 +45,45 @@ def cm_hard(inputs, indexes, features, momentum=0.5):
     return CM_Hard.apply(inputs, indexes, features, torch.Tensor([momentum]).to(inputs.device))
 
 
-def anchor(batch_input, batch_labels, indexes, feature_memory, k, temp, momentum):
+def _dedup_pick(cand_idx, labels_np, k):
+    """Most-similar instance per distinct cluster (first hit in similarity order);
+    -1 outliers count individually. Falls back to plain order if fewer than k
+    distinct clusters are available among the candidates."""
+    picked, seen = [], set()
+    for j in cand_idx:
+        lab = labels_np[j]
+        if lab == -1 or lab not in seen:
+            if lab != -1:
+                seen.add(lab)
+            picked.append(j)
+            if len(picked) == k:
+                return picked
+    for j in cand_idx:  # fallback fill, keeps hardest order
+        if j not in picked:
+            picked.append(j)
+            if len(picked) == k:
+                break
+    return picked
+
+
+def anchor(batch_input, batch_labels, indexes, feature_memory, k, temp, momentum, ban_lists=None, neg_dedup=False):
     """
     The anchor contrastive loss implementation in our paper.(Andy Zhu)
     The idea is to find the hardest same cluster sample as positive sample. (the minimum cosine similarity)
     And find K hard different cluster samples as negative samples. (the maximum cosine similarity)
     Finally, update feature memory by momentum update.
+
+    ban_lists: (ban_flat cuda LongTensor, ban_offsets numpy int64 array). Instances that are
+    jaccard-close to the anchor (share k-reciprocal neighbors) are likely the same identity
+    that DBSCAN failed to link, so they are excluded from the negative pool to avoid
+    false-negative repulsion. Positives are unaffected.
     """
     instance_m = feature_memory.features.clone().detach()
     mat = torch.matmul(batch_input, instance_m.transpose(0, 1))
+    if ban_lists is not None:
+        ban_flat, ban_offsets = ban_lists
+    labels_np = feature_memory.labels.cpu().numpy().astype(np.int64) if neg_dedup else None
+    cand_pool = min(2048, mat.size(1))
     positives = []
     negatives = []
     for i in range(batch_labels.size(0)):
@@ -62,8 +92,22 @@ def anchor(batch_input, batch_labels, indexes, feature_memory, k, temp, momentum
         positives.append(pos[torch.argmin(pos)])
         neg_labels = (feature_memory.labels != batch_labels[i])  # pseudo labels w/ -1
         # neg_labels = torch.logical_and(feature_memory.labels != batch_labels[i], feature_memory.labels != -1)  # ignore -1
-        neg = torch.sort(mat[i, neg_labels], descending=True)[0]
-        idx = neg[:k]
+        row = mat[i]
+        if ban_lists is not None:
+            idx_i = int(indexes[i])
+            ban_i = ban_flat[ban_offsets[idx_i]:ban_offsets[idx_i + 1]]
+            row = row.clone()
+            row[ban_i] = -2.
+        if neg_dedup:
+            # at most one (the hardest) instance per cluster: same-identity fragments
+            # occupy few clusters, so false-negative repulsion is capped near K=4 levels
+            masked = row.masked_fill(~neg_labels, -2.)
+            cand_idx = torch.topk(masked, cand_pool)[1].cpu().numpy()
+            sel = _dedup_pick(cand_idx, labels_np, k)
+            idx = masked[torch.as_tensor(sel, device=masked.device)]
+        else:
+            neg = torch.sort(row[neg_labels], descending=True)[0]
+            idx = neg[:k]
         negatives.append(idx)
     positives = torch.stack(positives)
     positives = positives.view(-1,1)
@@ -158,7 +202,9 @@ class ClusterMemory(nn.Module, ABC):
         # for i in range(patch_out.size(0)):
         #     patch_loss = patch_loss + self.criterion(patch_out[i,:], contrast_targets)
 
-        anchor_out = anchor(inputs, targets, indexes, feature_memory, k, self.temp, self.momentum)
+        anchor_out = anchor(inputs, targets, indexes, feature_memory, k, self.temp, self.momentum,
+                            ban_lists=getattr(self, 'ban_lists', None),
+                            neg_dedup=getattr(self, 'neg_dedup', False))
         anchor_loss = self.criterion(anchor_out, contrast_targets)
 
 

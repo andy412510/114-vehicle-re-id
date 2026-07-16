@@ -80,17 +80,20 @@ def pairwise_distance(features, query=None, gallery=None):
 def evaluate_all(query_features, gallery_features, distmat, query=None, gallery=None,
                  query_ids=None, gallery_ids=None,
                  query_cams=None, gallery_cams=None,
-                 cmc_topk=(1, 5, 10), cmc_flag=False):
+                 cmc_topk=(1, 5, 10), cmc_flag=False, vis_rank=False):
     if query is not None and gallery is not None:
         query_ids = [pid for _, pid, _ in query]
         gallery_ids = [pid for _, pid, _ in gallery]
         query_cams = [cam for _, _, cam in query]
         gallery_cams = [cam for _, _, cam in gallery]
-        query_img_paths = [fname for fname, _, _ in query]
-        gallery_img_paths = [fname for fname, _, _ in gallery]
     else:
         assert (query_ids is not None and gallery_ids is not None
                 and query_cams is not None and gallery_cams is not None)
+
+    if vis_rank and query is not None and gallery is not None:
+        query_img_paths = [fname for fname, _, _ in query]
+        gallery_img_paths = [fname for fname, _, _ in gallery]
+    else:
         query_img_paths = None
         gallery_img_paths = None
 
@@ -120,10 +123,10 @@ class Evaluator(object):
         super(Evaluator, self).__init__()
         self.model = model
 
-    def evaluate(self, data_loader, query, gallery, cmc_flag=False, rerank=False):
+    def evaluate(self, data_loader, query, gallery, cmc_flag=False, rerank=False, vis_rank=False):
         features, _ = extract_features(self.model, data_loader, cluster_features=False)
         distmat, query_features, gallery_features = pairwise_distance(features, query, gallery)
-        results = evaluate_all(query_features, gallery_features, distmat, query=query, gallery=gallery, cmc_flag=cmc_flag)
+        results = evaluate_all(query_features, gallery_features, distmat, query=query, gallery=gallery, cmc_flag=cmc_flag, vis_rank=vis_rank)
 
         if (not rerank):
             return results
@@ -132,4 +135,4 @@ class Evaluator(object):
         distmat_qq, _, _ = pairwise_distance(features, query, query)
         distmat_gg, _, _ = pairwise_distance(features, gallery, gallery)
         distmat = re_ranking(distmat.numpy(), distmat_qq.numpy(), distmat_gg.numpy())
-        return evaluate_all(query_features, gallery_features, distmat, query=query, gallery=gallery, cmc_flag=cmc_flag)
+        return evaluate_all(query_features, gallery_features, distmat, query=query, gallery=gallery, cmc_flag=cmc_flag, vis_rank=vis_rank)

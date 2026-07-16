@@ -10,6 +10,7 @@ import os, sys
 import time
 import numpy as np
 from scipy.spatial.distance import cdist
+from scipy.sparse import csr_matrix
 import gc
 import faiss
 
@@ -27,7 +28,7 @@ def k_reciprocal_neigh(initial_rank, i, k1):
     return forward_k_neigh_index[fi]
 
 
-def compute_jaccard_distance(target_features, k1=20, k2=6, print_flag=True, search_option=0, use_float16=False):
+def compute_jaccard_distance(target_features, k1=20, k2=6, print_flag=True, search_option=0, use_float16=False, sparse=False):
     end = time.time()
     if print_flag:
         print('Computing jaccard distance...')
@@ -69,7 +70,11 @@ def compute_jaccard_distance(target_features, k1=20, k2=6, print_flag=True, sear
         nn_k1.append(k_reciprocal_neigh(initial_rank, i, k1))
         nn_k1_half.append(k_reciprocal_neigh(initial_rank, i, int(np.around(k1/2))))
 
-    V = np.zeros((N, N), dtype=mat_type)
+    if sparse:
+        # scipy sparse has poor float16 support; the sparse path always uses float32
+        V_rows, V_cols, V_vals = [], [], []
+    else:
+        V = np.zeros((N, N), dtype=mat_type)
     for i in range(N):
         k_reciprocal_index = nn_k1[i]
         k_reciprocal_expansion_index = k_reciprocal_index
@@ -80,21 +85,84 @@ def compute_jaccard_distance(target_features, k1=20, k2=6, print_flag=True, sear
 
         k_reciprocal_expansion_index = np.unique(k_reciprocal_expansion_index)  ## element-wise unique
         dist = 2-2*torch.mm(target_features[i].unsqueeze(0).contiguous(), target_features[k_reciprocal_expansion_index].t())
-        if use_float16:
+        if sparse:
+            V_rows.append(np.full(len(k_reciprocal_expansion_index), i, dtype=np.int64))
+            V_cols.append(k_reciprocal_expansion_index.astype(np.int64))
+            V_vals.append(F.softmax(-dist, dim=1).view(-1).cpu().numpy().astype(np.float32))
+        elif use_float16:
             V[i,k_reciprocal_expansion_index] = F.softmax(-dist, dim=1).view(-1).cpu().numpy().astype(mat_type)
         else:
             V[i,k_reciprocal_expansion_index] = F.softmax(-dist, dim=1).view(-1).cpu().numpy()
 
     del nn_k1, nn_k1_half
 
+    if sparse:
+        V = csr_matrix((np.concatenate(V_vals), (np.concatenate(V_rows), np.concatenate(V_cols))),
+                       shape=(N, N), dtype=np.float32)
+        del V_rows, V_cols, V_vals
+
     if k2 != 1:
-        V_qe = np.zeros_like(V, dtype=mat_type)
-        for i in range(N):
-            V_qe[i,:] = np.mean(V[initial_rank[i,:k2],:], axis=0)
-        V = V_qe
-        del V_qe
+        if sparse:
+            # densify only the k2 selected rows per iteration so np.mean sees the
+            # exact same operands as the dense path (bitwise-identical results);
+            # a csr matmul with 1/k2 weights changes summation order and its ~1e-6
+            # drift is enough to flip DBSCAN decisions on eps-boundary pairs
+            qe_rows, qe_cols, qe_vals = [], [], []
+            for i in range(N):
+                mean_row = np.asarray(V[initial_rank[i, :k2], :].todense(), dtype=np.float32).mean(axis=0)
+                nz = np.where(mean_row != 0)[0]
+                qe_rows.append(np.full(len(nz), i, dtype=np.int64))
+                qe_cols.append(nz)
+                qe_vals.append(mean_row[nz])
+            V = csr_matrix((np.concatenate(qe_vals), (np.concatenate(qe_rows), np.concatenate(qe_cols))),
+                           shape=(N, N), dtype=np.float32)
+            del qe_rows, qe_cols, qe_vals
+        else:
+            V_qe = np.zeros_like(V, dtype=mat_type)
+            for i in range(N):
+                V_qe[i,:] = np.mean(V[initial_rank[i,:k2],:], axis=0)
+            V = V_qe
+            del V_qe
 
     del initial_rank
+
+    if sparse:
+        # entries never stored are exactly those with temp_min == 0, i.e. jaccard
+        # distance 1; sklearn's sparse precomputed DBSCAN treats missing entries
+        # as beyond eps, so dropping them cannot change the clustering result.
+        Vc = V.tocsc()
+        rows_out, cols_out, vals_out = [], [], []
+        acc = np.zeros(N, dtype=np.float32)
+        for i in range(N):
+            indNonZero = V.indices[V.indptr[i]:V.indptr[i+1]]
+            valNonZero = V.data[V.indptr[i]:V.indptr[i+1]]
+            touched = []
+            for v_ik, col in zip(valNonZero, indNonZero):
+                rows_j = Vc.indices[Vc.indptr[col]:Vc.indptr[col+1]]
+                vals_j = Vc.data[Vc.indptr[col]:Vc.indptr[col+1]]
+                acc[rows_j] += np.minimum(v_ik, vals_j)
+                touched.append(rows_j)
+            if len(touched) == 0:
+                continue
+            touched = np.unique(np.concatenate(touched))
+            temp_min = acc[touched]
+            dist_row = 1-temp_min/(2-temp_min)
+            np.maximum(dist_row, 0, out=dist_row)  # same clip as the dense pos_bool step
+            rows_out.append(np.full(len(touched), i, dtype=np.int64))
+            cols_out.append(touched)
+            vals_out.append(dist_row)
+            acc[touched] = 0
+        del Vc, V, acc
+        # explicit zeros (e.g. the diagonal) must stay stored: for sparse
+        # precomputed metrics, missing means "beyond eps", stored 0 means distance 0
+        jaccard_dist = csr_matrix((np.concatenate(vals_out), (np.concatenate(rows_out), np.concatenate(cols_out))),
+                                  shape=(N, N), dtype=np.float32)
+        del rows_out, cols_out, vals_out
+        from sklearn.neighbors import sort_graph_by_row_values
+        sort_graph_by_row_values(jaccard_dist, copy=False, warn_when_not_sorted=False)
+        if print_flag:
+            print("Jaccard distance computing time cost: {}".format(time.time()-end))
+        return jaccard_dist
 
     invIndex = []
     for i in range(N):

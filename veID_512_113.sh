@@ -3,9 +3,9 @@
 python train/main.py \
 	-b 512 \
 	-d VehicleID \
-	-K 64 \
+	-K 4 \
 	--patch-rate 0.4 \
-	--gpu 4,5,6,7 \
+	--gpu 0,1,2,3,4,5,6,7 \
 	--eps 0.8 \
 	--epochs 60 \
 	--logs-dir ./log/ \
